@@ -48,8 +48,6 @@ cp .env.example .env
 - `MCP_SHARED_TOKEN` — Bearer token Caddy requires on `/mcp`
 - `CB_USERNAME` / `CB_PASSWORD` — Couchbase UI login (defaults `Administrator` / `Administrator`)
 
-**Optional for a blog or your own demo**
-
 | Variable | What it changes |
 | --- | --- |
 | `VAPI_PUBLIC_KEY` | In-page calling without minting a JWT from the private key |
@@ -63,7 +61,24 @@ cp .env.example .env
 
 Seeded catalog and Jack’s script live in `src/catalog.ts` and `src/templates.ts`. Shop copy is in `ui/`.
 
-## How to run
+## Run locally with Docker Compose
+
+Docker Compose starts the whole local stack: Couchbase Enterprise, the seed job, the read-only MCP server, Mailpit, the shop API, and Caddy. After the containers are up, the pages are on your machine:
+
+```bash
+cp .env.example .env   # set VAPI_API_KEY
+docker compose up -d
+```
+
+- Customer shop: http://127.0.0.1:8080/customer
+- Supervisor UI: http://127.0.0.1:8080/ui
+- How to test:   http://127.0.0.1:8080/howto
+- Mail inbox:    http://127.0.0.1:8025
+- Couchbase UI:  http://127.0.0.1:8091
+
+`docker compose up` does not create the Vapi assistant. Jack needs a public HTTPS URL, so use `npm start` when you want the call.
+
+## How to run (shop + Jack)
 
 ```bash
 nvm use          # Node 18
@@ -71,7 +86,7 @@ npm install
 npm start
 ```
 
-Keep that terminal open. First start pulls images, boots Couchbase, seeds three last-week orders, opens a Cloudflare tunnel, and creates or updates Jack (`--replace`).
+Keep that terminal open. `npm start` runs Docker Compose, waits until the shop is healthy, opens a Cloudflare tunnel, then creates or updates Jack on your Vapi account and points his tools at `https://<tunnel>/mcp`.
 
 Ctrl+C or `npm stop` stops the tunnel and Docker.
 
