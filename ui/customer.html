@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Customer shop</title>
+    <link rel="stylesheet" href="/ui/theme.css" />
+  </head>
+  <body>
+    <header class="cb-nav">
+      <div class="inner">
+        <a class="brand" href="/customer">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <path fill="#cc2a2e" d="M16 2l12 7v14l-12 7-12-7V9l12-7zm0 4.2L8 10.7v10.6l8 4.5 8-4.5V10.7L16 6.2z"/>
+            <path fill="#cc2a2e" d="M16 11.2l5.2 3v6.6L16 23.8l-5.2-3v-6.6l5.2-3z"/>
+          </svg>
+          <div>
+            <strong>Couchbase</strong>
+            <span>Customer shop</span>
+          </div>
+        </a>
+        <nav>
+          <a class="active" href="/customer">Shop</a>
+          <a href="/ui">Supervisor</a>
+          <a href="/howto">How to test</a>
+          <a href="http://127.0.0.1:8091" target="_blank" rel="noreferrer">Cluster UI</a>
+          <button type="button" class="support-call" data-support-call>
+            <span class="label">Call support</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main class="cb-main">
+      <h1>How Couchbase Empowers Your Customer Service</h1>
+      <p class="lede">
+        Buy a product — it is stored in Couchbase. Call Jack for status, cancel,
+        or a delivery-date change. See <a href="/howto">How to test</a> for the
+        full walkthrough.
+      </p>
+      <div class="grid">
+        <section>
+          <h2>Products</h2>
+          <div id="products" class="products"><p class="empty">Loading…</p></div>
+        </section>
+        <aside>
+          <section class="card">
+            <h2>Checkout</h2>
+            <label for="name">Your name</label>
+            <input id="name" autocomplete="name" placeholder="Alex Martin" />
+            <label for="email">Email for OTP and confirmations</label>
+            <input id="email" type="email" autocomplete="email" value="hatim@hatim.com" placeholder="hatim@hatim.com" />
+            <p class="meta" style="margin-top:10px">Codes land in Mailpit on the local demo.</p>
+          </section>
+          <div id="flash"></div>
+          <section style="margin-top:18px">
+            <h2>Orders in Couchbase</h2>
+            <div id="orders"><p class="empty">Loading…</p></div>
+          </section>
+        </aside>
+      </div>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const saved = JSON.parse(localStorage.getItem("shop") || "{}");
+      if (saved.name) $("name").value = saved.name;
+      $("email").value = "hatim@hatim.com";
+      persist();
+      let lastDates = {};
+
+      function esc(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+        }[c]));
+      }
+
+      function persist() {
+        localStorage.setItem("shop", JSON.stringify({
+          name: $("name").value.trim(),
+          email: $("email").value.trim(),
+        }));
+      }
+
+      function money(n) {
+        return "$" + Number(n).toFixed(2);
+      }
+
+      function policyPills(o) {
+        const cancelClass = o.cancel_policy === "immediate" ? "ok" : o.cancel_policy === "supervisor" ? "warn" : "no";
+        const dateClass = o.date_policy === "supervisor" ? "ok" : "no";
+        return `<div class="policy">
+          <span class="pill ${cancelClass}">${esc(o.cancel_summary || "")}</span>
+          <span class="pill ${dateClass}">${esc(o.date_summary || "")}</span>
+        </div>`;
+      }
+
+      async function loadProducts() {
+        const res = await fetch("/api/products");
+        const data = await res.json();
+        const items = data.products || [];
+        $("products").innerHTML = items
+          .map(
+            (p) => `<article class="card">
+              <div class="tag">${esc(p.tag)}</div>
+              <strong>${esc(p.name)}</strong>
+              <div class="price">${money(p.price)}</div>
+              <div class="meta">${esc(p.blurb)} · about ${esc(p.eta_days)} days</div>
+              <button data-buy="${esc(p.product_id)}">Buy</button>
+            </article>`,
+          )
+          .join("");
+      }
+
+      function renderOrders(rows) {
+        if (!rows.length) {
+          $("orders").innerHTML = '<p class="empty">No orders in Couchbase yet.</p>';
+          return;
+        }
+        $("orders").innerHTML = rows
+          .map((o) => {
+            const changed = lastDates[o.order_id] && lastDates[o.order_id] !== o.estimated_delivery;
+            lastDates[o.order_id] = o.estimated_delivery;
+            const items = (o.items || []).map((i) => esc(i.name)).join(", ");
+            const cancelled = /cancel/i.test(o.status || "");
+            return `<article class="card order${changed ? " changed" : ""}${cancelled ? " cancelled" : ""}">
+              <strong>${esc(o.order_id)}</strong>
+              <div class="meta">
+                ${esc(o.customer || "")}${o.customer ? " · " : ""}${items}<br />
+                Status ${esc(o.status)} · delivery <strong>${esc(o.estimated_delivery)}</strong>
+              </div>
+              ${policyPills(o)}
+            </article>`;
+          })
+          .join("");
+      }
+
+      async function loadOrders() {
+        const res = await fetch("/api/orders");
+        const data = await res.json();
+        renderOrders(data.orders || []);
+      }
+
+      $("products").addEventListener("click", async (event) => {
+        const btn = event.target.closest("button[data-buy]");
+        if (!btn) return;
+        persist();
+        const customer = $("name").value.trim();
+        const customer_email = $("email").value.trim();
+        if (!customer || !customer_email || !customer_email.includes("@")) {
+          $("flash").innerHTML = '<p class="card">Enter your name and email before buying.</p>';
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              product_id: btn.dataset.buy,
+              quantity: 1,
+              customer,
+              customer_email,
+            }),
+          });
+          const order = await res.json();
+          if (!res.ok) throw new Error(order.error || "Purchase failed");
+          $("flash").innerHTML = `<article class="card flash">
+            Saved in Couchbase as <strong>${esc(order.order_id)}</strong>.
+            Call Jack, ask for that order, then read the OTP.
+          </article>`;
+          await loadOrders();
+        } catch (err) {
+          $("flash").innerHTML = `<p class="card">${esc(err.message)}</p>`;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      $("email").addEventListener("change", persist);
+      $("name").addEventListener("change", persist);
+
+      loadProducts();
+      loadOrders();
+      setInterval(loadOrders, 2000);
+    </script>
+    <script type="module" src="/ui/call.js"></script>
+  </body>
+</html>

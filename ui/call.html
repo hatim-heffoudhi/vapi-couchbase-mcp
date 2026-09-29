@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jack · Customer support</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1f1f1f; }
+      .phone {
+        min-height: 100%; box-sizing: border-box;
+        background: linear-gradient(180deg, #333 0%, #1f1f1f 100%);
+        color: #f4f4f4; display: flex; flex-direction: column; align-items: center;
+        padding: 48px 24px 36px; text-align: center;
+        font-family: "Open Sans", Helvetica, Arial, sans-serif;
+      }
+      .status { letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.78rem; color: #c8bfb0; margin: 0 0 8px; }
+      .timer { font-variant-numeric: tabular-nums; font-size: 1.25rem; color: #efe6d6; margin: 0 0 32px; }
+      .loader {
+        width: 176px; height: 176px; border-radius: 50%;
+        display: grid; place-items: center; margin: 24px 0 28px;
+      }
+      .spinner {
+        width: 56px; height: 56px; border-radius: 50%;
+        border: 4px solid #4a4a4a;
+        border-top-color: #efe6d6;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .avatar {
+        width: 176px; height: 176px; border-radius: 50%;
+        padding: 5px; box-sizing: border-box;
+        border: 4px solid #5a5550;
+        background: #2a2a2a;
+        margin-bottom: 20px;
+        overflow: hidden;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .avatar img {
+        width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
+        display: block;
+      }
+      .avatar.speaking {
+        border-color: #ffd35a;
+        box-shadow:
+          0 0 0 6px rgba(255, 211, 90, 0.28),
+          0 0 32px rgba(255, 211, 90, 0.55);
+        animation: speak-ring 1.1s ease-in-out infinite;
+      }
+      @keyframes speak-ring {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(255, 211, 90, 0.2), 0 0 18px rgba(255, 211, 90, 0.35); }
+        50% { box-shadow: 0 0 0 10px rgba(255, 211, 90, 0.12), 0 0 36px rgba(255, 211, 90, 0.7); }
+      }
+      h1 { font-size: 1.9rem; margin: 0 0 6px; font-weight: 600; }
+      .role { color: #c8bfb0; margin: 0 0 auto; }
+      .hang {
+        width: 72px; height: 72px; border-radius: 50%; border: 0;
+        background: #cc2a2e; color: #fff; cursor: pointer;
+        display: grid; place-items: center; margin-top: auto;
+      }
+      .hang:hover { background: #a51f23; }
+      .error { color: #ffb4b4; margin-top: 16px; font-size: 0.9rem; }
+      .phone:not(.ready) .live-only { display: none !important; }
+      .phone.ready .loader { display: none; }
+      .phone.raise { box-shadow: inset 0 0 0 4px #ffd35a; }
+    </style>
+  </head>
+  <body>
+    <div class="phone" id="phone">
+      <p class="status" id="status">Connecting</p>
+      <p class="timer live-only" id="timer">0:00</p>
+      <div class="loader" id="loader" aria-hidden="true"><div class="spinner"></div></div>
+      <div class="avatar live-only" id="avatar">
+        <img id="portrait" alt="Jack, customer support" />
+      </div>
+      <h1 class="live-only">Jack</h1>
+      <p class="role live-only">Customer support</p>
+      <button type="button" class="hang" id="hang" title="Hang up">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
+          <path d="M7.1 15.3c1.6 1.6 3.4 2.8 5.4 3.6l1.8-1.8c.2-.2.6-.3.9-.2 1 .3 2 .5 3.1.5.5 0 .9.4.9.9V21c0 .5-.4.9-.9.9C9.7 21.9 2.1 14.3 2.1 5.9c0 .5.4-.9.9-.9H6c.5 0 .9.4.9.9 0 1.1.2 2.1.5 3.1.1.3 0 .6-.2.9l-1.8 1.8c.8 2 3.8 3.7 5.4z" transform="rotate(135 12 12)"/>
+        </svg>
+      </button>
+      <p class="error" id="error" hidden></p>
+    </div>
+    <script type="module">
+      const phoneEl = document.getElementById("phone");
+      const statusEl = document.getElementById("status");
+      const timerEl = document.getElementById("timer");
+      const avatarEl = document.getElementById("avatar");
+      const portraitEl = document.getElementById("portrait");
+      const errorEl = document.getElementById("error");
+      const channel = new BroadcastChannel("support-call");
+      let currentState = "connecting";
+      let shown = false;
+      const portrait = new Image();
+      portrait.src = "/ui/jack.jpg";
+
+      function showJack() {
+        if (shown) return;
+        shown = true;
+        portraitEl.src = portrait.src;
+        phoneEl.classList.add("ready");
+      }
+
+      function tell(state) {
+        currentState = state;
+        channel.postMessage({ state });
+        try { localStorage.setItem("support-call-state", state); } catch {}
+      }
+
+      function raiseWindow() {
+        window.focus();
+        try { window.moveTo(window.screenX, window.screenY); } catch {}
+        phoneEl.classList.add("raise");
+        setTimeout(() => phoneEl.classList.remove("raise"), 800);
+        channel.postMessage({ type: "focused", state: currentState });
+      }
+
+      channel.onmessage = (event) => {
+        if (event.data?.type === "ping") tell(currentState);
+        if (event.data?.type === "focus" || event.data?.type === "raise") raiseWindow();
+      };
+      window.addEventListener("message", (event) => {
+        if (event.data?.type === "focus" || event.data?.type === "raise") raiseWindow();
+      });
+
+      function formatDuration(ms) {
+        const total = Math.max(0, Math.floor(ms / 1000));
+        const hours = Math.floor(total / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        const seconds = total % 60;
+        const pad = (n) => String(n).padStart(2, "0");
+        return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+      }
+
+      const cfg = await fetch("/api/support-call").then((r) => r.json());
+      if (!cfg.ready) {
+        statusEl.textContent = "Unavailable";
+        errorEl.hidden = false;
+        errorEl.textContent = cfg.reason || "Support calling is not ready.";
+        tell("idle");
+        throw new Error(cfg.reason);
+      }
+
+      const { default: Vapi } = await import("https://esm.sh/@vapi-ai/web");
+      const vapi = new Vapi(cfg.publicKey);
+      let startedAt = 0;
+      let tick = 0;
+
+      const startClock = () => {
+        if (startedAt) return;
+        startedAt = Date.now();
+        const paint = () => { timerEl.textContent = formatDuration(Date.now() - startedAt); };
+        paint();
+        tick = setInterval(paint, 250);
+      };
+
+      const resetOtp = () => {
+        try {
+          fetch("/api/call/end", { method: "POST", keepalive: true });
+        } catch {}
+      };
+
+      vapi.on("call-start", () => {
+        fetch("/api/call/start", { method: "POST" }).catch(() => {});
+        statusEl.textContent = "Connecting";
+        tell("live");
+        startClock();
+      });
+      vapi.on("speech-start", () => {
+        showJack();
+        startClock();
+        statusEl.textContent = "Jack is speaking";
+        avatarEl.classList.add("speaking");
+      });
+      vapi.on("speech-end", () => {
+        statusEl.textContent = "Call in progress";
+        avatarEl.classList.remove("speaking");
+      });
+      const ended = () => {
+        resetOtp();
+        clearInterval(tick);
+        avatarEl.classList.remove("speaking");
+        tell("idle");
+        window.close();
+      };
+      vapi.on("call-end", ended);
+      vapi.on("error", ended);
+      window.addEventListener("beforeunload", () => {
+        resetOtp();
+        tell("idle");
+      });
+
+      document.getElementById("hang").addEventListener("click", () => vapi.stop());
+      tell("connecting");
+      await vapi.start(cfg.assistantId);
+    </script>
+  </body>
+</html>

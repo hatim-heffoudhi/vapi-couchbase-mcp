@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Supervisor desk</title>
+    <link rel="stylesheet" href="/ui/theme.css" />
+  </head>
+  <body>
+    <header class="cb-nav">
+      <div class="inner">
+        <a class="brand" href="/ui">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <path fill="#cc2a2e" d="M16 2l12 7v14l-12 7-12-7V9l12-7zm0 4.2L8 10.7v10.6l8 4.5 8-4.5V10.7L16 6.2z"/>
+            <path fill="#cc2a2e" d="M16 11.2l5.2 3v6.6L16 23.8l-5.2-3v-6.6l5.2-3z"/>
+          </svg>
+          <div>
+            <strong>Couchbase</strong>
+            <span>Supervisor desk</span>
+          </div>
+        </a>
+        <nav>
+          <a href="/customer">Shop</a>
+          <a class="active" href="/ui">Supervisor</a>
+          <a href="/howto">How to test</a>
+          <a href="http://127.0.0.1:8091" target="_blank" rel="noreferrer">Cluster UI</a>
+          <button type="button" class="support-call" data-support-call>
+            <span class="label">Call support</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main class="cb-main">
+      <h1>Supervisor approvals</h1>
+      <p class="lede">
+        OTP codes, date-change requests, and cancellation requests land here.
+        Accept updates Couchbase. Jack checks quickly on the call until you
+        decide. Full walkthrough: <a href="/howto">How to test</a>.
+      </p>
+      <h2>Orders in Couchbase</h2>
+      <div id="orders"><p class="empty">Loading…</p></div>
+      <h2 style="margin-top:28px">Verification codes</h2>
+      <div id="codes"><p class="empty">Loading…</p></div>
+      <h2 style="margin-top:28px">Pending requests</h2>
+      <div id="list"><p class="empty">Loading…</p></div>
+    </main>
+    <script>
+      async function load() {
+        const [reqRes, otpRes, orderRes] = await Promise.all([
+          fetch("/api/requests"),
+          fetch("/api/otp"),
+          fetch("/api/orders"),
+        ]);
+        const data = await reqRes.json();
+        const otps = await otpRes.json();
+        const orderData = await orderRes.json();
+        const orders = document.getElementById("orders");
+        const allOrders = orderData.orders || [];
+        const pillClass = (kind, value) => {
+          if (kind === "cancel") {
+            return value === "immediate" ? "ok" : value === "supervisor" ? "warn" : "no";
+          }
+          return value === "supervisor" ? "ok" : "no";
+        };
+        orders.innerHTML = allOrders.length
+          ? allOrders
+              .map((o) => {
+                const items = (o.items || []).map((i) => i.name).join(", ");
+                return `<article class="card order">
+                  <strong>${o.order_id}</strong>
+                  <div class="meta">${o.customer ? o.customer + " · " : ""}${items}<br />Status ${o.status} · delivery ${o.estimated_delivery}</div>
+                  <div class="policy">
+                    <span class="pill ${pillClass("cancel", o.cancel_policy)}">${o.cancel_summary || ""}</span>
+                    <span class="pill ${pillClass("date", o.date_policy)}">${o.date_summary || ""}</span>
+                  </div>
+                </article>`;
+              })
+              .join("")
+          : '<p class="empty">No orders in Couchbase yet.</p>';
+        const codes = document.getElementById("codes");
+        const pending = otps.codes || [];
+        codes.innerHTML = pending.length
+          ? pending
+              .map(
+                (c) =>
+                  `<article class="card"><strong>${c.order_id}</strong> · code <strong>${c.code}</strong><div class="meta">Read this to the agent. Expires ${c.expires_at}</div></article>`,
+              )
+              .join("")
+          : '<p class="empty">No live verification codes.</p>';
+        const list = document.getElementById("list");
+        const rows = data.requests || [];
+        if (!rows.length) {
+          list.innerHTML = '<p class="empty">No supervisor requests yet.</p>';
+          return;
+        }
+        list.innerHTML = rows
+          .map((r) => {
+            const pending = r.status === "pending";
+            const cancel = r.kind === "cancel" || r.requested_delivery === "cancelled";
+            const detail = cancel
+              ? "Cancel this order"
+              : `${r.current_delivery} → ${r.requested_delivery}`;
+            return `<article class="card">
+              <div class="row">
+                <div>
+                  <strong>${r.order_id}</strong>
+                  <div class="meta">
+                    ${r.customer ? r.customer + " · " : ""}${cancel ? "Cancellation · " : "Date change · "}
+                    ${detail}<br />
+                    ${r.request_id}
+                  </div>
+                </div>
+                <div>
+                  <div class="status ${r.status}">${r.status}</div>
+                  ${
+                    pending
+                      ? `<div class="actions" style="margin-top:10px">
+                          <button class="ok" data-id="${r.request_id}" data-act="approve">Accept</button>
+                          <button class="no" data-id="${r.request_id}" data-act="reject">Reject</button>
+                        </div>`
+                      : ""
+                  }
+                </div>
+              </div>
+            </article>`;
+          })
+          .join("");
+      }
+
+      document.getElementById("list").addEventListener("click", async (event) => {
+        const btn = event.target.closest("button[data-id]");
+        if (!btn) return;
+        btn.disabled = true;
+        await fetch("/api/requests/" + btn.dataset.id + "/" + btn.dataset.act, { method: "POST" });
+        await load();
+      });
+
+      load();
+      setInterval(load, 2000);
+    </script>
+    <script type="module" src="/ui/call.js"></script>
+  </body>
+</html>

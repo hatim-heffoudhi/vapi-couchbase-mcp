@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.env.local
+.vapi-state.json
+*.log
+.DS_Store

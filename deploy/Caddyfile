@@ -1,0 +1,43 @@
+:80 {
+	encode gzip
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /mcp* {
+		@denied not header Authorization "Bearer {$MCP_SHARED_TOKEN}"
+		respond @denied "Unauthorized" 401
+		reverse_proxy couchbase-mcp:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
+	}
+
+	handle /api* {
+		reverse_proxy changes-api:4000
+	}
+
+	handle /shop* {
+		reverse_proxy changes-api:4000
+	}
+
+	handle /howto* {
+		reverse_proxy changes-api:4000
+	}
+
+	handle /customer* {
+		reverse_proxy changes-api:4000
+	}
+
+	handle /ui* {
+		reverse_proxy changes-api:4000
+	}
+
+	handle / {
+		reverse_proxy changes-api:4000
+	}
+}

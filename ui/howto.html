@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How to test</title>
+    <link rel="stylesheet" href="/ui/theme.css" />
+  </head>
+  <body>
+    <header class="cb-nav">
+      <div class="inner">
+        <a class="brand" href="/howto">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <path fill="#cc2a2e" d="M16 2l12 7v14l-12 7-12-7V9l12-7zm0 4.2L8 10.7v10.6l8 4.5 8-4.5V10.7L16 6.2z"/>
+            <path fill="#cc2a2e" d="M16 11.2l5.2 3v6.6L16 23.8l-5.2-3v-6.6l5.2-3z"/>
+          </svg>
+          <div>
+            <strong>Couchbase</strong>
+            <span>How to test</span>
+          </div>
+        </a>
+        <nav>
+          <a href="/customer">Shop</a>
+          <a href="/ui">Supervisor</a>
+          <a class="active" href="/howto">How to test</a>
+          <a href="http://127.0.0.1:8091" target="_blank" rel="noreferrer">Cluster UI</a>
+          <button type="button" class="support-call" data-support-call>
+            <span class="label">Call support</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main class="cb-main">
+      <h1>How to test Jack</h1>
+      <p class="lede">
+        One call, one OTP, then order lookup, cancel, and supervisor approvals
+        against Couchbase through MCP.
+      </p>
+
+      <section class="card demo">
+        <h2>Pages</h2>
+        <ol>
+          <li><a href="/customer">Shop</a> — buy a product. The order is written to <code>order-demo._default.orders</code>.</li>
+          <li><a href="/ui">Supervisor</a> — OTP codes and Accept / Reject for date changes and late cancellations.</li>
+          <li><a href="http://127.0.0.1:8025" target="_blank" rel="noreferrer">Mailpit</a> — OTP and confirmation emails for this local demo.</li>
+          <li><a href="http://127.0.0.1:8091" target="_blank" rel="noreferrer">Cluster UI</a> — Buckets → <code>order-demo</code> → Documents.</li>
+        </ol>
+      </section>
+
+      <section class="card demo" style="margin-top:16px">
+        <h2>MCP demo with Jack</h2>
+        <ol>
+          <li><strong>Write path:</strong> the shop inserts JSON orders into <code>order-demo._default.orders</code>.</li>
+          <li><strong>Read path:</strong> Jack uses Couchbase MCP (read-only) — <code>get_document_by_id</code> for <code>order-1001</code> in bucket <code>order-demo</code> scope <code>_default</code>, or SQL++ such as <code>SELECT * FROM `order-demo`.`_default`.`orders` WHERE order_id = 'ORD-1001'</code>.</li>
+          <li><strong>Analytics:</strong> after the first OTP, ask how many orders are processing, the sum of totals, or which deliveries are still upcoming.</li>
+          <li><strong>Cancel:</strong> a new shop order (processing, under six hours) cancels immediately if you say you placed it by mistake. ORD-1001 is processing from last week and needs Supervisor Accept. ORD-1002 is shipped — cannot cancel; only the delivery date can be updated. ORD-1003 is delivered — cannot cancel or change the date.</li>
+          <li><strong>Human-in-the-loop:</strong> a date change or late cancellation is not written through MCP. You Accept on Supervisor; Jack checks quickly until it is approved, then speaks the result.</li>
+        </ol>
+      </section>
+
+      <section class="card demo" style="margin-top:16px">
+        <h2>Test script</h2>
+        <ol>
+          <li>On Shop, buy a product as Hatim. Note the new order number.</li>
+          <li>Click Call support. Allow the popup. Wait until you hear Jack’s hello.</li>
+          <li>Ask for that new order. Give the number. Read the OTP from Supervisor or Mailpit. He should not ask for OTP again later in the same call.</li>
+          <li>Say you placed it by mistake. He should cancel it immediately.</li>
+          <li>Ask about ORD-1001 (processing, last week). Ask to cancel. Keep the call open, open Supervisor, click Accept. Jack should say it is approved without a long pause.</li>
+          <li>Ask to cancel ORD-1002 (shipped). He should refuse and offer a date change instead.</li>
+          <li>Ask to change a delivery date on ORD-1002. Accept or Reject on Supervisor. Jack should speak the outcome.</li>
+        </ol>
+      </section>
+    </main>
+    <script type="module" src="/ui/call.js"></script>
+  </body>
+</html>

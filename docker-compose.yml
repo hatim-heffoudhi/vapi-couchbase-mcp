@@ -1,0 +1,105 @@
+services:
+  couchbase:
+    image: couchbase:enterprise
+    restart: unless-stopped
+    ulimits:
+      nproc: 4096
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "127.0.0.1:8091:8091"
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8091/ui/index.html >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 50s
+
+  couchbase-init:
+    image: couchbase:enterprise
+    restart: "no"
+    depends_on:
+      couchbase:
+        condition: service_healthy
+    environment:
+      CB_HOST: couchbase
+      CB_USERNAME: ${CB_USERNAME:-Administrator}
+      CB_PASSWORD: ${CB_PASSWORD}
+      CUSTOMER_NAME: ${CUSTOMER_NAME:-Hatim Heffoudhi}
+      DEMO_CUSTOMER_EMAIL: ${DEMO_CUSTOMER_EMAIL:-hatim@hatim.com}
+    volumes:
+      - ./deploy/couchbase-init.sh:/scripts/couchbase-init.sh:ro
+    entrypoint: ["/bin/bash", "/scripts/couchbase-init.sh"]
+
+  couchbase-mcp:
+    image: docker.io/couchbase/mcp-server:latest
+    restart: unless-stopped
+    depends_on:
+      couchbase-init:
+        condition: service_completed_successfully
+    environment:
+      CB_CONNECTION_STRING: couchbase://couchbase
+      CB_USERNAME: ${CB_USERNAME:-Administrator}
+      CB_PASSWORD: ${CB_PASSWORD}
+      CB_MCP_TRANSPORT: http
+      CB_MCP_HOST: 0.0.0.0
+      CB_MCP_PORT: "8000"
+      CB_MCP_READ_ONLY_MODE: ${CB_MCP_READ_ONLY_MODE:-true}
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    expose:
+      - "1025"
+
+  changes-api:
+    build: .
+    image: vapi-couchbase-changes:local
+    restart: unless-stopped
+    depends_on:
+      couchbase-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    environment:
+      CB_HOST: couchbase
+      CB_USERNAME: ${CB_USERNAME:-Administrator}
+      CB_PASSWORD: ${CB_PASSWORD}
+      CB_BUCKET: order-demo
+      CB_SCOPE: _default
+      DEMO_CUSTOMER_EMAIL: ${DEMO_CUSTOMER_EMAIL:-hatim@hatim.com}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-Order Support <noreply@local.test>}
+      MAIL_SMTP_HOST: mailpit
+      MAIL_SMTP_PORT: "1025"
+      VAPI_API_KEY: ${VAPI_API_KEY:-}
+      VAPI_PUBLIC_KEY: ${VAPI_PUBLIC_KEY:-}
+      VAPI_ORG_ID: ${VAPI_ORG_ID:-}
+      STATE_FILE: /app/.vapi-state.json
+      PORT: "4000"
+    volumes:
+      - ./.vapi-state.json:/app/.vapi-state.json:ro
+      - ./ui:/app/ui:ro
+    expose:
+      - "4000"
+
+  proxy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      MCP_SHARED_TOKEN: ${MCP_SHARED_TOKEN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - couchbase-mcp
+      - changes-api
+
+volumes:
+  couchbase-data:

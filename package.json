@@ -1,0 +1,28 @@
+{
+  "name": "vapi-couchbase-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Couchbase Enterprise + MCP, tunneled to Vapi OrderBot",
+  "scripts": {
+    "start": "bash deploy/up.sh",
+    "stop": "bash deploy/down.sh",
+    "check-node": "node -e \"if (Number(process.versions.node.split('.')[0]) < 18) { console.error('Need Node.js 18+. Run: nvm use 18'); process.exit(1) }\"",
+    "agent": "npm run check-node && tsx src/index.ts",
+    "typecheck": "npm run check-node && tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dotenv": "^16.6.1",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/nodemailer": "^8.0.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
