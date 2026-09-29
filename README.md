@@ -1,4 +1,4 @@
-# How Couchbase Empowers Your Customer Service
+# Vapi voice agent with Couchbase MCP
 
 Local demo: a customer shop writes orders into **Couchbase Enterprise**. **Jack** (one Vapi voice assistant) verifies the caller with an email OTP, looks up orders through **Couchbase MCP**, and can cancel or request a delivery-date change. Late cancels and date changes wait for a human on the supervisor desk. Vapi never talks to `localhost`; a Cloudflare tunnel exposes HTTPS.
 
